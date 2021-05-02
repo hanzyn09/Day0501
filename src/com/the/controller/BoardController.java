@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.Vector;
@@ -29,6 +30,7 @@ public class BoardController extends HttpServlet {
        
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		String uri = request.getRequestURI();
+		request.setCharacterEncoding("utf-8");
 		//StringBuffer url = request.getRequestURL();
 		System.out.println("URI : " + uri);
 		//System.out.println("URL : " + url);
@@ -36,9 +38,10 @@ public class BoardController extends HttpServlet {
 		String[] strs = uri.split("[/]"); 	//[]안에 해당되는 범위. 주소를 / 로 분할
 		String key = strs[strs.length-1]; 	//마지막 문자열만 key 변수에 저장.
 		String path = null;
-		
-		if(key.equals("list")) {
 	
+		if(key.equals("list")) {
+			Connection connection = null; 
+			
 			//드라이버 로딩 필수.
 		    //tomcat 사이트에서 확인 가능하며 mysql과 oracle은 url과 드라이버의 형식이 다르다.
 		    try {
@@ -48,7 +51,7 @@ public class BoardController extends HttpServlet {
 			    String user = "the";
 			    String password = "oracle";
 			    
-			   	Connection connection = DriverManager.getConnection(url, user, password); //예외처리 해줘야 함
+			    connection = DriverManager.getConnection(url, user, password); //예외처리 해줘야 함
 			   	System.out.println("DB 접속 완료");
 			   	
 			   	//쿼리를 실행할 문서 준비해서 쿼리 셋팅
@@ -83,12 +86,61 @@ public class BoardController extends HttpServlet {
 			   	
 			} catch (Exception e) {
 				e.printStackTrace();
+			} finally {
+				try{
+					if(connection != null) connection.close();
+				} catch(Exception e ){
+					e.getMessage();
+				}
 			}
 		    	
 			path ="/WEB-INF/views/board/list.jsp";
 			
 		} else if(key.equals("write")) {
 			path ="/WEB-INF/views/board/write.jsp";
+		} else if(key.equals("insert")) {
+			//웹에서 정보 읽어오기
+			String subject = request.getParameter("subject"); //숫자로 가져오려면 형변환 필요, 스프링은 자동 맵핑해준다.
+			String content = request.getParameter("content"); //오타나면 입력되지않는다.
+			String writer = "guest"; //회원가입 처리 시 자동으로 저장시킬 수 있다.
+			//no값이 없다 : primary key 인데 어떻게 처리할 것인지?
+			Connection connection =null;
+			
+			//DB에 저장 : DB에 접속해야하는데 중복 되므로 클래스로 분리해서 따로 뽑아낸다. (지금은 연습을 위해서 타이핑)
+			try {
+				Class.forName("oracle.jdbc.OracleDriver");
+				String url = "jdbc:oracle:thin:@127.0.0.1:1521:xe" ; //tomcat, documentation에서 확인
+			    String user = "the";
+			    String password = "oracle";
+			    
+			   	connection = DriverManager.getConnection(url, user, password); //예외처리. 커넥션을 통해 sql설정.
+			   	System.out.println("DB 접속 완료");
+			   	
+			   	String sql = "INSERT INTO board"
+			   			+ "(no, subject, content, writer, created_date) " //띄어쓰기 유의
+			   			+ "values"
+			   			+ "(SEQ_BOARD.nextval, ?, ?, ?, sysdate)";
+			   	PreparedStatement pstmt =  connection.prepareStatement(sql);
+			   	pstmt.setString(1, subject); //db 인덱스는 1번부터 시작
+			   	pstmt.setString(2, content); 
+			   	pstmt.setString(3, writer); 
+			   	
+			   	//int n = pstmt.executeUpdate(); //몇개가 업데이트 되었는지 리턴
+			   	pstmt.executeUpdate();
+				
+			} catch (ClassNotFoundException | SQLException e) {
+				e.printStackTrace();
+			} finally {
+				try{
+					if(connection != null) connection.close();
+				} catch(Exception e ){
+					e.getMessage();
+				}
+			}
+			
+			//list로 요청
+			response.sendRedirect("list");
+			return; //이걸 넣어줘야 아래에서 path null 처리 안함
 		} 
 		
 		
